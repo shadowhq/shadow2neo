@@ -6,12 +6,15 @@ from collections import namedtuple
 from itertools import tee
 from operator import itemgetter
 from subprocess import Popen, PIPE
- 
+from py2neo import authenticate, Graph, Path
  
 Commit = namedtuple('Commit', ['sha1', 'parents', 'author_email', 'refs', 'subject', 'timestamp', 'date_iso_8601'])
 GIT_LOG_FORMAT = '%x1E'.join(['%H', '%P', '%ae', '%d', '%s', '%at', '%ai'])
  
 seen_sha1s = set()
+
+authenticate("localhost:7474", "neo4j", "test")
+graph = Graph()
  
 def as_list(elements):
   items = [e for e in elements if e]
@@ -32,10 +35,12 @@ def mk_commit(commit_line):
 def create_node(neo4j_op, sha1_ident, property_pairs):
   if property_pairs:
     properties = ','.join('{0}:{1!r}'.format(k, v) for k, v in property_pairs)
-    return neo4j_op + ' (c_{0}:Commit {{{1}}})'.format(sha1_ident, properties)
+    statement = neo4j_op + ' (c_{0}:Commit {{{1}}})'.format(sha1_ident, properties)
   else:
-    return neo4j_op + ' (c_{0}:Commit)'.format(sha1_ident)
- 
+    statement = neo4j_op + ' (c_{0}:Commit)'.format(sha1_ident)
+  graph.cypher.execute(statement)
+  return statement
+
 def create_rel(sha1, parent):
   return '(c_{0})<-[:PARENT]-(c_{1})'.format(sha1, parent)
  

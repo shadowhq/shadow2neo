@@ -6,7 +6,7 @@ from collections import namedtuple
 from itertools import tee
 from operator import itemgetter
 from subprocess import Popen, PIPE
-from py2neo import authenticate, Graph, Path
+from py2neo import authenticate, Graph, Path, Relationship
  
 Commit = namedtuple('Commit', ['sha1', 'parents', 'author_email', 'refs', 'subject', 'timestamp', 'date_iso_8601'])
 GIT_LOG_FORMAT = '%x1E'.join(['%H', '%P', '%ae', '%d', '%s', '%at', '%ai'])
@@ -15,7 +15,7 @@ seen_sha1s = set()
 
 authenticate("localhost:7474", "neo4j", "test")
 graph = Graph()
- 
+
 def as_list(elements):
   items = [e for e in elements if e]
   return items or None
@@ -42,6 +42,9 @@ def create_node(neo4j_op, sha1_ident, property_pairs):
   return statement
 
 def create_rel(sha1, parent):
+  parentNode = graph.find_one('Commit', 'sha1', parent)
+  childNode = graph.find_one('Commit', 'sha1', sha1)
+  graph.create(Relationship(parentNode, "PARENT", childNode))
   return '(c_{0})<-[:PARENT]-(c_{1})'.format(sha1, parent)
  
 def mk_node_stmts(neo4j_op, sha1_ident, **properties):
@@ -120,6 +123,7 @@ if __name__ == "__main__":
   parser.add_argument('--json', action='store_true', help='print JSON output for the Cypher REST API.')
   parser.add_argument('branch', help='which branch to examine - defaults to HEAD', nargs='?', default=None)
   arguments = parser.parse_args()
+  graph.delete_all()
   res = main(arguments.neo4j_op, arguments.limit, arguments.branch)
   if arguments.json:
     import json, sys
